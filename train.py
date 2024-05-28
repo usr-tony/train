@@ -61,9 +61,11 @@ def main():
                 running_loss = 0
 
         era_corrs = validate(model, validation_df)
-        best_era_corr = era_corrs.sum()
-
-    torch.save(model, 'model.pkl')
+        total_corr = era_corrs.sum()
+        print(total_corr)
+        if best_era_corr < total_corr:
+            best_era_corr = total_corr
+            torch.save(model, 'model.pkl')
 
 
 class Embedding(nn.Module):
