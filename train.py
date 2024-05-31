@@ -194,7 +194,8 @@ def validate(model: nn.Module, validation_df: pd.DataFrame):
     predictions = []
     for x in validation_loader:
         y = model(torch.Tensor([]), x)
-        predictions.append(y.detach().numpy())
+        y = torch.Tensor(y.detach(), device='cpu')
+        predictions.append(y.numpy())
 
     validation_df['prediction'] = np.concatenate(predictions)
     era_corrs = validation_df.groupby('era').apply(
