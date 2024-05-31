@@ -186,7 +186,7 @@ def get_validation_df(features):
 
 
 def validate(model: nn.Module, validation_df: pd.DataFrame):
-    validation = torch.Tensor(validation_df.drop(columns=['era', 'target']).values).to(device)
+    validation = torch.Tensor(validation_df[get_features()].values).to(device)
     validation_loader = DataLoader(validation, shuffle=False, batch_size=2048)
     model.eval()
     predictions = []
