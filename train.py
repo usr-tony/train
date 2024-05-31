@@ -14,12 +14,8 @@ pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
 numerai_data_path = Path(DATA_VERSION)
 EMBED_DIM = 64
-if torch.cuda.is_available():
-    device = 'cuda'
-    print('cuda available')
-else:
-    device = 'cpu'
-    print('using cpu')
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(f'{device=}')
 
 
 def main():
@@ -51,6 +47,7 @@ def main():
         model.train()
         for i, (x, labels) in enumerate(train_loader):
             optimizer.zero_grad()
+            print(x.shape)
             y = model(torch.Tensor([]), x)
             loss = loss_func(y, labels)
             loss.backward()
@@ -62,8 +59,8 @@ def main():
                 running_loss = 0
 
         era_corrs = validate(model, validation_df)
-        total_corr = era_corrs.sum()
-        print(total_corr)
+        total_corr = era_corrs['prediction'].sum()
+        print(f'{total_corr=}')
         if best_era_corr < total_corr:
             best_era_corr = total_corr
             torch.save(model, 'model.pkl')
@@ -184,7 +181,8 @@ def get_train_df(features: list[str]):
 
 
 def get_validation_df(features):
-    return pd.read_parquet(numerai_data_path / 'validation_int8.parquet', columns=features + ['era', 'target'])
+    df = pd.read_parquet(numerai_data_path / 'validation_int8.parquet', columns=features + ['era', 'target'])
+    return df[df['target'].notna()]
 
 
 def validate(model: nn.Module, validation_df: pd.DataFrame):
@@ -194,7 +192,7 @@ def validate(model: nn.Module, validation_df: pd.DataFrame):
     predictions = []
     for x in validation_loader:
         y = model(torch.Tensor([]), x)
-        y = torch.Tensor(y.detach(), device='cpu')
+        y = torch.tensor(y.detach(), device='cpu')
         predictions.append(y.numpy())
 
     validation_df['prediction'] = np.concatenate(predictions)
