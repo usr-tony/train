@@ -37,7 +37,8 @@ def main():
     optimizer = torch.optim.SGD(
         model.parameters(), 
         lr=1e-6,
-        nesterov=0.9,
+        nesterov=True,
+        momentum=0.3,
     )
     train_df = get_train_df(get_features())
     train = RandomData(train_df)
