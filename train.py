@@ -47,7 +47,6 @@ def main():
         model.train()
         for i, (x, labels) in enumerate(train_loader):
             optimizer.zero_grad()
-            print(x.shape)
             y = model(torch.Tensor([]), x)
             loss = loss_func(y, labels)
             loss.backward()
