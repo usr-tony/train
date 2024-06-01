@@ -14,7 +14,7 @@ pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
 numerai_data_path = Path(DATA_VERSION)
 EMBED_DIM = 64
-BATCH_SIZE = 2 ** 13
+BATCH_SIZE = 2 ** 12
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'{device=}')
 
