@@ -187,13 +187,14 @@ def get_validation_df(features):
 
 def validate(model: nn.Module, validation_df: pd.DataFrame):
     validation = torch.Tensor(validation_df[get_features()].values).to(device)
-    validation_loader = DataLoader(validation, shuffle=False, batch_size=2048)
+    validation_loader = DataLoader(validation, shuffle=False, batch_size=BATCH_SIZE)
     model.eval()
     predictions = []
-    for x in validation_loader:
+    for i, x in enumerate(validation_loader):
         y = model(torch.Tensor([]), x)
         y = torch.tensor(y.detach(), device='cpu')
         predictions.append(y.numpy())
+        print(i, end='\r')
 
     validation_df['prediction'] = np.concatenate(predictions)
     era_corrs = validation_df.groupby('era').apply(
