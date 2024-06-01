@@ -25,7 +25,7 @@ def main():
         categories=[],
         num_continuous=len(get_features()),
         dim=EMBED_DIM,
-        depth=6,
+        depth=2,
         heads=8,
         attn_dropout=0.2,
         ff_dropout=0.1,
