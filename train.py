@@ -14,6 +14,7 @@ pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
 numerai_data_path = Path(DATA_VERSION)
 EMBED_DIM = 64
+BATCH_SIZE = 2 ** 13
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'{device=}')
 
@@ -24,7 +25,7 @@ def main():
         categories=[],
         num_continuous=len(get_features()),
         dim=EMBED_DIM,
-        depth=4,
+        depth=6,
         heads=8,
         attn_dropout=0.2,
         ff_dropout=0.1,
@@ -39,7 +40,7 @@ def main():
     train_df = get_train_df(get_features())
     train = RandomData(train_df)
     validation_df = get_validation_df(get_features())
-    train_loader = DataLoader(train, batch_size=2048)
+    train_loader = DataLoader(train, batch_size=BATCH_SIZE)
     model.to(device)
     running_loss = 0
     best_era_corr = 0
@@ -53,8 +54,8 @@ def main():
             optimizer.step()
             running_loss += loss.item()
             if i % 9 == 0:
-                progress = i * 2048 / len(train) * 100 
-                print(f'{epoch=} {progress:.2f}% {running_loss=}')
+                progress = i * BATCH_SIZE / len(train) * 100 
+                print(f'{epoch=} {progress:.2f}% {running_loss=:.5f}')
                 running_loss = 0
 
         era_corrs = validate(model, validation_df)
@@ -62,7 +63,7 @@ def main():
         print(f'{total_corr=} {best_era_corr=}')
         if best_era_corr < total_corr:
             best_era_corr = total_corr
-            torch.save(model, 'model.pkl')
+            torch.save(model, f'model_epoch_{epoch}.pkl')
 
 
 class Embedding(nn.Module):
