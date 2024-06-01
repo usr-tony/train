@@ -34,7 +34,7 @@ def main():
         model.parameters(), 
         lr=1e-6,
         nesterov=True,
-        momentum=0.3,
+        momentum=0.6,
     )
     train_df = get_train_df(get_features())
     train = RandomData(train_df)
