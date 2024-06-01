@@ -59,7 +59,7 @@ def main():
 
         era_corrs = validate(model, validation_df)
         total_corr = era_corrs['prediction'].sum()
-        print(f'{total_corr=}')
+        print(f'{total_corr=} {best_era_corr=}')
         if best_era_corr < total_corr:
             best_era_corr = total_corr
             torch.save(model, 'model.pkl')
