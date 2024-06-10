@@ -9,6 +9,8 @@ from tab_transformer_pytorch import FTTransformer
 from numerapi import NumerAPI
 from numerai_tools.scoring import numerai_corr
 import numpy as np
+import json
+from tqdm import tqdm
 
 pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
@@ -30,40 +32,29 @@ def main():
         attn_dropout=0.2,
         ff_dropout=0.1,
     )
-    loss_func = nn.L1Loss() 
+    loss_func = nn.MSELoss() 
     optimizer = torch.optim.SGD(
         model.parameters(), 
-        lr=1e-6,
+        lr=1e-4,
         nesterov=True,
-        momentum=0.6,
+        momentum=0.3,
     )
+    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     train_df = get_train_df(get_features())
     train = RandomData(train_df)
-    validation_df = get_validation_df(get_features())
     train_loader = DataLoader(train, batch_size=BATCH_SIZE)
     model.to(device)
-    running_loss = 0
-    best_era_corr = 0
     for epoch in range(10):
         model.train()
-        for i, (x, labels) in enumerate(train_loader):
+        for i, (x, labels) in enumerate(tqdm(train_loader)):
             optimizer.zero_grad()
             y = model(torch.Tensor([]), x)
-            loss = loss_func(y, labels)
+            loss = loss_func(y, labels) - corr(y, labels)
             loss.backward()
             optimizer.step()
-            running_loss += loss.item()
-            if i % 9 == 0:
-                progress = i * BATCH_SIZE / len(train) * 100 
-                print(f'{epoch=} {progress:.2f}% {running_loss=:.5f}')
-                running_loss = 0
 
-        era_corrs = validate(model, validation_df)
-        total_corr = era_corrs['prediction'].sum()
-        print(f'{total_corr=} {best_era_corr=}')
-        if best_era_corr < total_corr:
-            best_era_corr = total_corr
-            torch.save(model, f'model_epoch_{epoch}.pkl')
+        scheduler.step()
+        torch.save(model, f'model_epoch_{epoch}.pkl')
 
 
 class Embedding(nn.Module):
@@ -171,9 +162,14 @@ def download_datasets():
 
 
 @cached({})
-def get_features():
-    # retrieve the most important features based GBT model
-    return pd.read_parquet('important_features.parquet').feature.tolist()
+def get_features() -> list[str]:
+    # return small features
+    napi = NumerAPI()
+    napi.download_dataset(f"{DATA_VERSION}/features.json");
+    with open(numerai_data_path / 'features.json') as f:
+        features = json.loads(f.read())
+
+    return features['feature_sets']['small']
 
 
 def get_train_df(features: list[str]):
@@ -202,6 +198,14 @@ def validate(model: nn.Module, validation_df: pd.DataFrame):
     )
     era_corrs.to_parquet('era_corrs.parquet')
     return era_corrs
+
+
+def corr(a: torch.Tensor, b: torch.Tensor):
+    da = a - a.mean()
+    db = b - b.mean()
+    numer = torch.sum(da * db)
+    denom = torch.sqrt(torch.sum(da ** 2) * torch.sum(db ** 2))
+    return numer / denom
 
 
 if __name__ == '__main__':

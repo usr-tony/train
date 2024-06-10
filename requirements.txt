@@ -7,3 +7,4 @@ numerapi
 numerai-tools
 cachetools
 tab-transformer-pytorch
+tqdm
