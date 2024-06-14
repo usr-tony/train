@@ -5,9 +5,7 @@ from einops import rearrange
 import pandas as pd
 from pathlib import Path
 from cachetools import cached
-from tab_transformer_pytorch import FTTransformer
 from numerapi import NumerAPI
-from numerai_tools.scoring import numerai_corr
 import numpy as np
 import json
 from tqdm import tqdm
@@ -23,37 +21,25 @@ print(f'{device=}')
 
 def main():
     download_datasets()
-    model = FTTransformer(
-        categories=[],
-        num_continuous=len(get_features()),
-        dim=EMBED_DIM,
-        depth=2,
-        heads=8,
-        attn_dropout=0.2,
-        ff_dropout=0.1,
-    )
+    model = Model(nfeatures=len(get_features()))
     loss_func = nn.MSELoss() 
     optimizer = torch.optim.SGD(
         model.parameters(), 
         lr=1e-4,
-        nesterov=True,
-        momentum=0.3,
     )
-    scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.9)
     train_df = get_train_df(get_features())
-    train = RandomData(train_df)
-    train_loader = DataLoader(train, batch_size=BATCH_SIZE)
+    train = DataByEra(train_df)
+    train_loader = DataLoader(train, batch_size=1)
     model.to(device)
     for epoch in range(10):
         model.train()
-        for i, (x, labels) in enumerate(tqdm(train_loader)):
+        for i, ([x], [labels]) in enumerate(tqdm(train_loader)):
             optimizer.zero_grad()
             y = model(torch.Tensor([]), x)
             loss = loss_func(y, labels) - corr(y, labels)
             loss.backward()
             optimizer.step()
 
-        scheduler.step()
         torch.save(model, f'model_epoch_{epoch}.pkl')
 
 
@@ -134,8 +120,8 @@ class DataByEra(Dataset):
         data = self.df.loc[era]
         data = data.sample(self.era_counts.min()) # this is necessary to prevent memory leaks in the multiheadattention module
         return [
-            torch.from_numpy(data.drop(columns='target').values), 
-            torch.from_numpy(data[['target']].values)
+            torch.from_numpy(data.drop(columns='target').values).to(device), 
+            torch.from_numpy(data[['target']].values).to(device)
         ]
 
 
@@ -176,27 +162,26 @@ def get_train_df(features: list[str]):
     return pd.read_parquet(numerai_data_path / 'train_int8.parquet', columns=features + ['era', 'target'])
 
 
-def get_validation_df(features):
+def get_validation_df(features: list[str]):
     df = pd.read_parquet(numerai_data_path / 'validation_int8.parquet', columns=features + ['era', 'target'])
-    return df[df['target'].notna()]
+    return df[df['target'].notna()] 
 
 
 def validate(model: nn.Module, validation_df: pd.DataFrame):
-    validation = torch.Tensor(validation_df[get_features()].values).to(device)
-    validation_loader = DataLoader(validation, shuffle=False, batch_size=BATCH_SIZE)
+    validation = torch.Tensor(validation_df.drop(columns=['era', 'target']).values).to(device)
+    validation_loader = DataLoader(validation, shuffle=False, batch_size=2048)
     model.eval()
     predictions = []
-    for i, x in enumerate(validation_loader):
+    for x in tqdm(validation_loader):
         y = model(torch.Tensor([]), x)
-        y = torch.tensor(y.detach(), device='cpu')
-        predictions.append(y.numpy())
-        print(i, end='\r')
+        predictions.append(y.detach().cpu().numpy())
 
     validation_df['prediction'] = np.concatenate(predictions)
+    validation_df[['prediction']].to_parquet('predictions.parquet')
     era_corrs = validation_df.groupby('era').apply(
-        lambda x: numerai_corr(x[['prediction']], x['target'])
+        lambda x: x['target'].corr(x['prediction'])
     )
-    era_corrs.to_parquet('era_corrs.parquet')
+    print(era_corrs.cumsum())
     return era_corrs
 
 
