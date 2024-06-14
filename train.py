@@ -4,12 +4,13 @@ from torch.utils.data import Dataset, DataLoader
 from einops import rearrange
 import pandas as pd
 from pathlib import Path
-from cachetools import cached
+from functools import cache
 from numerapi import NumerAPI
 import numpy as np
 import json
 from tqdm import tqdm
 
+napi = NumerAPI()
 pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
 numerai_data_path = Path(DATA_VERSION)
@@ -20,7 +21,6 @@ print(f'{device=}')
 
 
 def main():
-    download_datasets()
     model = Model(nfeatures=len(get_features()))
     loss_func = nn.MSELoss() 
     optimizer = torch.optim.SGD(
@@ -141,16 +141,9 @@ class RandomData(Dataset):
         )
 
 
-def download_datasets():
-    napi = NumerAPI()
-    napi.download_dataset(f"{DATA_VERSION}/train_int8.parquet")
-    napi.download_dataset(f"{DATA_VERSION}/validation_int8.parquet")
-
-
-@cached({})
+@cache
 def get_features() -> list[str]:
     # return small features
-    napi = NumerAPI()
     napi.download_dataset(f"{DATA_VERSION}/features.json");
     with open(numerai_data_path / 'features.json') as f:
         features = json.loads(f.read())
@@ -158,31 +151,35 @@ def get_features() -> list[str]:
     return features['feature_sets']['small']
 
 
-def get_train_df(features: list[str]):
+def get_train_df(features: list[str]=None):
+    features = features or get_features()
+    napi.download_dataset(f"{DATA_VERSION}/train_int8.parquet")
     return pd.read_parquet(numerai_data_path / 'train_int8.parquet', columns=features + ['era', 'target'])
 
 
-def get_validation_df(features: list[str]):
+def get_validation_df(features: list[str]=None):
+    features = features or get_features()
+    napi.download_dataset(f"{DATA_VERSION}/validation_int8.parquet")
     df = pd.read_parquet(numerai_data_path / 'validation_int8.parquet', columns=features + ['era', 'target'])
     return df[df['target'].notna()] 
 
 
-def validate(model: nn.Module, validation_df: pd.DataFrame):
-    validation = torch.Tensor(validation_df.drop(columns=['era', 'target']).values).to(device)
-    validation_loader = DataLoader(validation, shuffle=False, batch_size=2048)
-    model.eval()
-    predictions = []
-    for x in tqdm(validation_loader):
-        y = model(torch.Tensor([]), x)
-        predictions.append(y.detach().cpu().numpy())
+def evaluate(model, validation_df=None):
+    if validation_df is None:
+        validation_df = get_validation_df()
 
-    validation_df['prediction'] = np.concatenate(predictions)
-    validation_df[['prediction']].to_parquet('predictions.parquet')
-    era_corrs = validation_df.groupby('era').apply(
-        lambda x: x['target'].corr(x['prediction'])
-    )
-    print(era_corrs.cumsum())
-    return era_corrs
+    validation_df = validation_df.copy(deep=False)
+    predictions = []
+    for era, group in validation_df.groupby('era'):
+        x = group[get_features()].values.astype(np.int8)
+        x = torch.from_numpy(x).to(device)
+        group['prediction'] = model(x).detach().cpu().numpy()
+        predictions.append(group['prediction'])
+
+    predictions = pd.concat(predictions)
+    validation_df['prediction'] = predictions
+    era_corrs = validation_df[['prediction', 'target', 'era']].groupby('era').corr()
+    return predictions, era_corrs
 
 
 def corr(a: torch.Tensor, b: torch.Tensor):
