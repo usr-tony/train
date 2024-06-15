@@ -157,15 +157,17 @@ def get_features() -> list[str]:
 
 def get_train_df(features: tuple[str]=None):
     features = features or get_features()
-    napi.download_dataset(f"{DATA_VERSION}/train_int8.parquet")
-    return pd.read_parquet(numerai_data_path / 'train_int8.parquet', columns=['era', 'target'] + list(features))
+    path = f"{DATA_VERSION}/train_int8.parquet"
+    napi.download_dataset(path)
+    return pd.read_parquet(path, columns=['era', 'target'] + list(features))
 
 
 @cache
 def get_validation_df(features: tuple[str]=None):
     features = features or get_features()
-    napi.download_dataset(f"{DATA_VERSION}/validation_int8.parquet")
-    df = pd.read_parquet(numerai_data_path / 'validation_int8.parquet', columns=['era', 'target'] + list(features))
+    path = f"{DATA_VERSION}/validation_int8.parquet"
+    napi.download_dataset(path)
+    df = pd.read_parquet(path, columns=['era', 'target'] + list(features))
     return df[df['target'].notna()] 
 
 
