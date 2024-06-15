@@ -44,6 +44,7 @@ def main():
         validation_preds, era_corr = evaluate(model)
         print('sum of correlations', era_corr.sum())
         torch.save(model, f'model_epoch_{epoch}.pkl')
+        print()
 
 
 class Embedding(nn.Module):
@@ -174,7 +175,7 @@ def evaluate(model, validation_df=None):
 
     validation_df = validation_df.copy(deep=False)
     predictions = []
-    for era, group in validation_df.groupby('era'):
+    for era, group in tqdm(validation_df.groupby('era')):
         x = group.loc[:, get_features()].values.astype(np.int8)
         x = torch.from_numpy(x).to(device)
         group['prediction'] = model(x).detach().cpu().numpy()
