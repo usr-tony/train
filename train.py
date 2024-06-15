@@ -145,10 +145,10 @@ class RandomData(Dataset):
 
 
 @cache
-def get_features() -> list[str]:
-    # return small features
-    napi.download_dataset(f"{DATA_VERSION}/features.json");
-    with open(numerai_data_path / 'features.json') as f:
+def get_features() -> tuple[str]:
+    path = f"{DATA_VERSION}/features.json"
+    napi.download_dataset(path)
+    with open(path) as f:
         features = json.loads(f.read())
 
     return tuple(features['feature_sets']['small'])
