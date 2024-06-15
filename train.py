@@ -40,7 +40,6 @@ def main():
             loss.backward()
             optimizer.step()
 
-        model.eval()
         validation_preds, era_corr = evaluate(model)
         print('sum of correlations', era_corr.sum())
         torch.save(model, f'model_epoch_{epoch}.pkl')
@@ -172,6 +171,7 @@ def get_validation_df(features: tuple[str]=None):
 
 
 def evaluate(model, validation_df=None):
+    model.eval()
     if validation_df is None:
         validation_df = get_validation_df()
 
