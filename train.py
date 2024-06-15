@@ -40,6 +40,9 @@ def main():
             loss.backward()
             optimizer.step()
 
+        model.eval()
+        validation_preds, era_corr = evaluate(model)
+        print('sum of correlations', era_corr.sum())
         torch.save(model, f'model_epoch_{epoch}.pkl')
 
 
@@ -148,19 +151,20 @@ def get_features() -> list[str]:
     with open(numerai_data_path / 'features.json') as f:
         features = json.loads(f.read())
 
-    return features['feature_sets']['small']
+    return tuple(features['feature_sets']['small'])
 
 
-def get_train_df(features: list[str]=None):
+def get_train_df(features: tuple[str]=None):
     features = features or get_features()
     napi.download_dataset(f"{DATA_VERSION}/train_int8.parquet")
-    return pd.read_parquet(numerai_data_path / 'train_int8.parquet', columns=features + ['era', 'target'])
+    return pd.read_parquet(numerai_data_path / 'train_int8.parquet', columns=['era', 'target'] + list(features))
 
 
-def get_validation_df(features: list[str]=None):
+@cache
+def get_validation_df(features: tuple[str]=None):
     features = features or get_features()
     napi.download_dataset(f"{DATA_VERSION}/validation_int8.parquet")
-    df = pd.read_parquet(numerai_data_path / 'validation_int8.parquet', columns=features + ['era', 'target'])
+    df = pd.read_parquet(numerai_data_path / 'validation_int8.parquet', columns=['era', 'target'] + list(features))
     return df[df['target'].notna()] 
 
 
@@ -171,15 +175,20 @@ def evaluate(model, validation_df=None):
     validation_df = validation_df.copy(deep=False)
     predictions = []
     for era, group in validation_df.groupby('era'):
-        x = group[get_features()].values.astype(np.int8)
+        x = group.loc[:, get_features()].values.astype(np.int8)
         x = torch.from_numpy(x).to(device)
         group['prediction'] = model(x).detach().cpu().numpy()
         predictions.append(group['prediction'])
 
-    predictions = pd.concat(predictions)
-    validation_df['prediction'] = predictions
-    era_corrs = validation_df[['prediction', 'target', 'era']].groupby('era').corr()
-    return predictions, era_corrs
+    validation_df['prediction'] = pd.concat(predictions)
+
+    # calculate corr per era
+    era_corrs = (
+        validation_df[['prediction', 'target', 'era']]
+        .groupby('era')
+        .apply(lambda x: x['prediction'].corr(x['target']))
+    )
+    return validation_df, era_corrs
 
 
 def corr(a: torch.Tensor, b: torch.Tensor):
