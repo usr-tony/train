@@ -35,7 +35,7 @@ def main():
         model.train()
         for i, ([x], [labels]) in enumerate(tqdm(train_loader)):
             optimizer.zero_grad()
-            y = model(torch.Tensor([]), x)
+            y = model(x)
             loss = loss_func(y, labels) - corr(y, labels)
             loss.backward()
             optimizer.step()
