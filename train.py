@@ -74,7 +74,7 @@ class Transformer(nn.Module):
             nn.LayerNorm(dim),
             nn.Linear(dim, inner_dim),
             nn.GELU(), # GEGLU is used in the paper
-            nn.Dropout(0.8),
+            nn.Dropout(0.2),
             nn.Linear(inner_dim, dim)
         )
 
@@ -170,7 +170,7 @@ def get_validation_df(features: tuple[str]=None):
     return df[df['target'].notna()] 
 
 
-def evaluate(model, validation_df=None):
+def evaluate(model: nn.Module, validation_df: pd.DataFrame=None):
     model.eval()
     if validation_df is None:
         validation_df = get_validation_df()
