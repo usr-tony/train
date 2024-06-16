@@ -30,6 +30,7 @@ def main():
     train_df = get_train_df(get_features())
     train = DataByEra(train_df)
     train_loader = DataLoader(train, batch_size=1)
+    best_corr = 0
     model.to(device)
     for epoch in range(10):
         model.train()
@@ -40,9 +41,14 @@ def main():
             loss.backward()
             optimizer.step()
 
-        validation_preds, era_corr = evaluate(model)
-        print('sum of correlations', era_corr.sum())
-        torch.save(model, f'model_epoch_{epoch}.pkl')
+        validation_preds_df, era_corr = evaluate(model)
+        corr_sum = era_corr.sum()
+        print('sum of correlations', corr_sum)
+        validation_preds_df[['prediction']].to_parquet(f'predictions_epoch_{epoch}.parquet')
+        if best_corr < corr_sum:
+            best_corr = corr_sum
+            torch.save(model, f'model_epoch_{epoch}.pkl')
+            
         print()
 
 
