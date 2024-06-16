@@ -17,7 +17,6 @@ print(f'{device=}')
 
 
 def main():
-    download_datasets()
     model = FTTransformer(
         categories=[],
         num_continuous=len(get_features()),
@@ -48,3 +47,5 @@ def main():
             optimizer.step()
 
         torch.save(model, f'model_epoch_{epoch}.pkl')
+
+main()
