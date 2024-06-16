@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 from tab_transformer_pytorch import FTTransformer
 from tqdm import tqdm
-from train import *
+from train import get_features, RandomData, get_train_df, corr
 
 pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
