@@ -157,7 +157,7 @@ def get_features() -> tuple[str]:
     with open(path) as f:
         features = json.loads(f.read())
 
-    return tuple(features['feature_sets']['small'])
+    return tuple(features['feature_sets']['medium'])
 
 
 def get_train_df(features: tuple[str]=None):
