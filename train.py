@@ -15,6 +15,7 @@ pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
 numerai_data_path = Path(DATA_VERSION)
 EMBED_DIM = 16
+FEATURE_SET = 'medium'
 BATCH_SIZE = 2 ** 11
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'{device=}')
@@ -157,7 +158,7 @@ def get_features() -> tuple[str]:
     with open(path) as f:
         features = json.loads(f.read())
 
-    return tuple(features['feature_sets']['medium'])
+    return tuple(features['feature_sets'][FEATURE_SET])
 
 
 def get_train_df(features: tuple[str]=None):
