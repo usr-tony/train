@@ -14,9 +14,8 @@ napi = NumerAPI()
 pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
 numerai_data_path = Path(DATA_VERSION)
-EMBED_DIM = 16
+EMBED_DIM = 12
 FEATURE_SET = 'medium'
-BATCH_SIZE = 2 ** 11
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'{device=}')
 
