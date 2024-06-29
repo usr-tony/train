@@ -33,6 +33,7 @@ def main():
     best_corr = 0
     model.to(device)
     for epoch in range(10):
+        print(f'epoch {epoch}')
         model.train()
         for i, ([x], [labels]) in enumerate(tqdm(train_loader)):
             optimizer.zero_grad()
