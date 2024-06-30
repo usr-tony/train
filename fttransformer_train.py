@@ -5,7 +5,7 @@ import pandas as pd
 from pathlib import Path
 from tab_transformer_pytorch import FTTransformer
 from tqdm import tqdm
-from train import get_features, RandomData, get_train_df, corr
+from train import *
 
 pd.options.display.float_format = lambda x: f'{x:.5f}'
 DATA_VERSION = 'v4.3'
@@ -41,7 +41,7 @@ def main():
         model.train()
         for i, (x, labels) in enumerate(tqdm(train_loader)):
             optimizer.zero_grad()
-            y = model(torch.Tensor([]), x)
+            y = model(torch.tensor([]), x)
             loss = loss_func(y, labels) - corr(y, labels)
             loss.backward()
             optimizer.step()

@@ -16,6 +16,7 @@ DATA_VERSION = 'v4.3'
 numerai_data_path = Path(DATA_VERSION)
 EMBED_DIM = 12
 FEATURE_SET = 'medium'
+BUCKET_NAME = 'train1230'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'{device=}')
 
@@ -48,7 +49,7 @@ def main():
         validation_preds_df[['prediction']].to_parquet(f'predictions_epoch_{epoch}.parquet')
         if best_corr < corr_sum:
             best_corr = corr_sum
-            torch.save(model.state_dict(), f'model.pkl')
+            torch.save(model.state_dict(), 'model.pkl')
         else:
             print('no improvement')
             return
