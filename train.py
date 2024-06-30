@@ -10,19 +10,22 @@ import numpy as np
 import json
 from tqdm import tqdm
 
-napi = NumerAPI()
-pd.options.display.float_format = lambda x: f'{x:.5f}'
-DATA_VERSION = 'v4.3'
-numerai_data_path = Path(DATA_VERSION)
+
 EMBED_DIM = 12
 FEATURE_SET = 'medium'
+
 BUCKET_NAME = 'train1230'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'{device=}')
+DATA_VERSION = 'v4.3'
+numerai_data_path = Path(DATA_VERSION)
+napi = NumerAPI()
 
 
 def main():
-    model = Model(nfeatures=len(get_features()))
+    model = Model(
+        nfeatures=len(get_features())
+    ).to(device)
     loss_func = nn.MSELoss() 
     optimizer = torch.optim.SGD(
         model.parameters(), 
@@ -31,12 +34,11 @@ def main():
     train_df = get_train_df(get_features())
     train = DataByEra(train_df)
     train_loader = DataLoader(train, batch_size=1)
-    best_corr = 0
-    model.to(device)
+    best_corr = -np.inf
     for epoch in range(10):
         print(f'epoch {epoch}')
         model.train()
-        for i, ([x], [labels]) in enumerate(tqdm(train_loader)):
+        for [x], [labels] in tqdm(train_loader):
             optimizer.zero_grad()
             y = model(x)
             loss = loss_func(y, labels) - corr(y, labels)
@@ -44,11 +46,11 @@ def main():
             optimizer.step()
 
         validation_preds_df, era_corr = evaluate(model)
-        corr_sum = era_corr.sum()
-        print('sum of correlations', corr_sum)
+        era_corr_sum = era_corr.sum()
+        print('sum of correlations', era_corr_sum)
         validation_preds_df[['prediction']].to_parquet(f'predictions_epoch_{epoch}.parquet')
-        if best_corr < corr_sum:
-            best_corr = corr_sum
+        if best_corr < era_corr_sum:
+            best_corr = era_corr_sum
             torch.save(model.state_dict(), 'model.pkl')
         else:
             print('no improvement')
