@@ -48,7 +48,10 @@ def main():
         validation_preds_df[['prediction']].to_parquet(f'predictions_epoch_{epoch}.parquet')
         if best_corr < corr_sum:
             best_corr = corr_sum
-            torch.save(model, f'model_epoch_{epoch}.pkl')
+            torch.save(model.state_dict(), f'model.pkl')
+        else:
+            print('no improvement')
+            return
             
         print()
 
