@@ -35,7 +35,7 @@ def main():
     train = DataByEra(train_df)
     train_loader = DataLoader(train, batch_size=1)
     best_corr = -np.inf
-    for epoch in range(10):
+    for epoch in range(20):
         print(f'epoch {epoch}')
         model.train()
         for [x], [labels] in tqdm(train_loader):
@@ -47,7 +47,7 @@ def main():
 
         validation_preds_df, era_corr = evaluate(model)
         era_corr_sum = era_corr.sum()
-        print('sum of correlations', era_corr_sum)
+        print('sum of correlations \n', era_corr_sum)
         validation_preds_df[['prediction']].to_parquet(f'predictions_epoch_{epoch}.parquet')
         if best_corr < era_corr_sum:
             best_corr = era_corr_sum
@@ -55,8 +55,6 @@ def main():
         else:
             print('no improvement')
             return
-            
-        print()
 
 
 class Embedding(nn.Module):
