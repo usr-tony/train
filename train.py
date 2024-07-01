@@ -9,6 +9,7 @@ from numerapi import NumerAPI
 import numpy as np
 import json
 from tqdm import tqdm
+import os
 
 
 EMBED_DIM = 12
@@ -26,6 +27,13 @@ def main():
     model = Model(
         nfeatures=len(get_features())
     ).to(device)
+    try:
+        model.load_state_dict(torch.load('model.pkl'))
+        print('loaded pretrained model')
+    except Exception as e:
+        print(e)
+        pass
+    
     loss_func = nn.MSELoss() 
     optimizer = torch.optim.SGD(
         model.parameters(), 
