@@ -9,8 +9,6 @@ from numerapi import NumerAPI
 import numpy as np
 import json
 from tqdm import tqdm
-import os
-
 
 EMBED_DIM = 12
 FEATURE_SET = 'medium'
@@ -33,7 +31,7 @@ def main():
     except Exception as e:
         print(e)
         pass
-    
+
     loss_func = nn.MSELoss() 
     optimizer = torch.optim.SGD(
         model.parameters(), 
