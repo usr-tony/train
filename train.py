@@ -9,9 +9,13 @@ from numerapi import NumerAPI
 import numpy as np
 import json
 from tqdm import tqdm
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
-EMBED_DIM = 12
-FEATURE_SET = 'medium'
+
+sdpa_kernel(SDPBackend.FLASH_ATTENTION).__enter__()
+
+EMBED_DIM = 32
+FEATURE_SET = 'small'
 
 BUCKET_NAME = 'train1230'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -47,14 +51,18 @@ def main():
         for [x], [labels] in tqdm(train_loader):
             optimizer.zero_grad()
             y = model(x)
-            loss = loss_func(y, labels) - corr(y, labels)
+            loss = loss_func(y, labels) * 0.1 - corr(y, labels) * 0.9
             loss.backward()
             optimizer.step()
 
-        validation_preds_df, era_corr = evaluate(model)
-        era_corr_sum = era_corr.sum()
+        if epoch < 5:
+            print('skipping validation for first 5 epochs')
+            continue
+
+        with torch.no_grad():
+            era_corr_sum = evaluate(model, epoch).sum()
+        
         print('sum of correlations \n', era_corr_sum)
-        validation_preds_df[['prediction']].to_parquet(f'predictions_epoch_{epoch}.parquet')
         if best_corr < era_corr_sum:
             best_corr = era_corr_sum
             torch.save(model.state_dict(), 'model.pkl')
@@ -77,7 +85,7 @@ class Embedding(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, dim=EMBED_DIM):
+    def __init__(self, dim=EMBED_DIM, ff_inner_dim=EMBED_DIM * 4):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.attn = nn.MultiheadAttention(
@@ -86,13 +94,12 @@ class Transformer(nn.Module):
             batch_first=True,
             dropout=0.1,
         )
-        inner_dim = dim * 4
         self.ff = nn.Sequential(
             nn.LayerNorm(dim),
-            nn.Linear(dim, inner_dim),
+            nn.Linear(dim, ff_inner_dim),
             nn.GELU(), # GEGLU is used in the paper
             nn.Dropout(0.2),
-            nn.Linear(inner_dim, dim)
+            nn.Linear(ff_inner_dim, dim)
         )
 
     def forward(self, x):
@@ -105,16 +112,14 @@ class Transformer(nn.Module):
 class Model(nn.Module):
     def __init__(self, nfeatures, embed_dim=EMBED_DIM):
         super().__init__()
-        self.nfeatures = nfeatures
-        
         self.embedding = Embedding(nfeatures)
         self.transformer = Transformer(embed_dim)
-        self.inter_sample_transformer = Transformer(embed_dim * nfeatures)
+        self.inter_sample_transformer = Transformer(embed_dim * nfeatures, ff_inner_dim=embed_dim * 200)
         self.final = nn.Sequential(
             # layernorm here?
-            nn.Linear(EMBED_DIM, 999),
+            nn.Linear(embed_dim * nfeatures, 256),
             nn.ReLU(),
-            nn.Linear(999, 1),
+            nn.Linear(256, 1),
         )
 
     def forward(self, x):
@@ -122,9 +127,8 @@ class Model(nn.Module):
         x = self.transformer(x)
         x = rearrange(x, 'b n d -> 1 b (n d)')
         x = self.inter_sample_transformer(x)
-        x = rearrange(x, "1 b (n d) -> b n d", n=self.nfeatures)
 
-        return self.final(x[:, 0]) # apply only the class tokens/first feature
+        return self.final(x).squeeze(0)
 
 
 class DataByEra(Dataset):
@@ -185,9 +189,9 @@ def get_validation_df(features: tuple[str]=None):
     napi.download_dataset(path)
     df = pd.read_parquet(path, columns=['era', 'target'] + list(features))
     return df[df['target'].notna()] 
+    
 
-
-def evaluate(model: nn.Module, validation_df: pd.DataFrame=None):
+def evaluate(model: nn.Module, epoch: int, validation_df: pd.DataFrame=None):
     model.eval()
     if validation_df is None:
         validation_df = get_validation_df()
@@ -201,14 +205,13 @@ def evaluate(model: nn.Module, validation_df: pd.DataFrame=None):
         predictions.append(group['prediction'])
 
     validation_df['prediction'] = pd.concat(predictions)
-
+    validation_df[['prediction']].to_parquet(f'predictions_epoch_{epoch}.parquet')
     # calculate corr per era
-    era_corrs = (
+    return (
         validation_df[['prediction', 'target', 'era']]
         .groupby('era')
         .apply(lambda x: x['prediction'].corr(x['target']))
     )
-    return validation_df, era_corrs
 
 
 def corr(a: torch.Tensor, b: torch.Tensor):
