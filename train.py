@@ -85,7 +85,7 @@ class Embedding(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, dim=EMBED_DIM, ff_inner_dim=EMBED_DIM * 4):
+    def __init__(self, dim=EMBED_DIM):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.attn = nn.MultiheadAttention(
@@ -96,10 +96,10 @@ class Transformer(nn.Module):
         )
         self.ff = nn.Sequential(
             nn.LayerNorm(dim),
-            nn.Linear(dim, ff_inner_dim),
+            nn.Linear(dim, dim * 4),
             nn.GELU(), # GEGLU is used in the paper
             nn.Dropout(0.2),
-            nn.Linear(ff_inner_dim, dim)
+            nn.Linear(dim * 4, dim)
         )
 
     def forward(self, x):
@@ -114,7 +114,7 @@ class Model(nn.Module):
         super().__init__()
         self.embedding = Embedding(nfeatures)
         self.transformer = Transformer(embed_dim)
-        self.inter_sample_transformer = Transformer(embed_dim * nfeatures, ff_inner_dim=embed_dim * 200)
+        self.inter_sample_transformer = Transformer(embed_dim * nfeatures)
         self.final = nn.Sequential(
             # layernorm here?
             nn.Linear(embed_dim * nfeatures, 256),
