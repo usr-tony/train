@@ -36,9 +36,9 @@ def main():
         print(e)
         pass
 
-    loss_func = nn.MSELoss() 
+    loss_func = nn.MSELoss()
     optimizer = torch.optim.SGD(
-        model.parameters(), 
+        model.parameters(),
         lr=1e-4,
     )
     train_df = get_train_df(get_features())
@@ -61,7 +61,7 @@ def main():
 
         with torch.no_grad():
             era_corr_sum = evaluate(model, epoch).sum()
-        
+
         print('sum of correlations \n', era_corr_sum)
         if best_corr < era_corr_sum:
             best_corr = era_corr_sum
@@ -138,13 +138,13 @@ class DataByEra(Dataset):
 
     def __len__(self):
         return len(self.era_counts)
-    
+
     def __getitem__(self, idx):
         era = self.era_counts.index[idx]
         data = self.df.loc[era]
         data = data.sample(self.era_counts.min()) # this is necessary to prevent memory leaks in the multiheadattention module
         return [
-            torch.from_numpy(data.drop(columns='target').values).to(device), 
+            torch.from_numpy(data.drop(columns='target').values).to(device),
             torch.from_numpy(data[['target']].values).to(device)
         ]
 
@@ -157,10 +157,10 @@ class RandomData(Dataset):
 
     def __len__(self):
         return len(self.y)
-    
+
     def __getitem__(self, idx):
         return (
-            self.x[idx], 
+            self.x[idx],
             self.y[idx],
         )
 
@@ -188,8 +188,8 @@ def get_validation_df(features: tuple[str]=None):
     path = f"{DATA_VERSION}/validation_int8.parquet"
     napi.download_dataset(path)
     df = pd.read_parquet(path, columns=['era', 'target'] + list(features))
-    return df[df['target'].notna()] 
-    
+    return df[df['target'].notna()]
+
 
 def evaluate(model: nn.Module, epoch: int, validation_df: pd.DataFrame=None):
     model.eval()
