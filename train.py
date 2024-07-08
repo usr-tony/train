@@ -45,7 +45,7 @@ def main():
     train = DataByEra(train_df)
     train_loader = DataLoader(train, batch_size=1)
     best_corr = -np.inf
-    for epoch in range(20):
+    for epoch in range(30):
         print(f'epoch {epoch}')
         model.train()
         for [x], [labels] in tqdm(train_loader):
@@ -56,7 +56,7 @@ def main():
             optimizer.step()
 
         if epoch < 5:
-            print('skipping validation for first 5 epochs')
+            print('skipping validation')
             continue
 
         with torch.no_grad():
