@@ -37,9 +37,9 @@ def main():
         pass
 
     loss_func = nn.MSELoss()
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=1e-4,
+        lr=5e-6,
     )
     train_df = get_train_df(get_features())
     train = DataByEra(train_df)
@@ -55,7 +55,7 @@ def main():
             loss.backward()
             optimizer.step()
 
-        if epoch < 5:
+        if epoch < 10:
             print('skipping validation')
             continue
 
@@ -66,9 +66,6 @@ def main():
         if best_corr < era_corr_sum:
             best_corr = era_corr_sum
             torch.save(model.state_dict(), 'model.pkl')
-        else:
-            print('no improvement')
-            return
 
 
 class Embedding(nn.Module):
@@ -114,10 +111,10 @@ class Model(nn.Module):
         super().__init__()
         self.embedding = Embedding(nfeatures)
         self.transformer = Transformer(embed_dim)
-        self.inter_sample_transformer = Transformer(embed_dim * nfeatures)
+        self.inter_sample_transformer = Transformer(nfeatures * 4)
         self.final = nn.Sequential(
             # layernorm here?
-            nn.Linear(embed_dim * nfeatures, 256),
+            nn.Linear(nfeatures * 4, 256),
             nn.ReLU(),
             nn.Linear(256, 1),
         )
@@ -125,9 +122,9 @@ class Model(nn.Module):
     def forward(self, x):
         x = self.embedding(x)
         x = self.transformer(x)
-        x = rearrange(x, 'b n d -> 1 b (n d)')
+        x = x[:, :, :4].reshape(1, -1, x.shape[1] * 4) # x.shape[1] = nfeatures
+        # should the stacking be changed such that each head has 1 embedding?
         x = self.inter_sample_transformer(x)
-
         return self.final(x).squeeze(0)
 
 
