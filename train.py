@@ -15,7 +15,7 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 sdpa_kernel(SDPBackend.FLASH_ATTENTION).__enter__()
 
 EMBED_DIM = 32
-FEATURE_SET = 'small'
+FEATURE_SET = 'medium'
 
 BUCKET_NAME = 'train1230'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -29,26 +29,28 @@ def main():
     model = Model(
         nfeatures=len(get_features())
     ).to(device)
+    model = nn.DataParallel(model)
     try:
         model.load_state_dict(torch.load('model.pkl'))
         print('loaded pretrained model')
     except Exception as e:
         print(e)
         pass
-
+    
     loss_func = nn.MSELoss()
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.SGD(
         model.parameters(),
-        lr=5e-6,
+        lr=1e-3,
     )
     train_df = get_train_df(get_features())
     train = DataByEra(train_df)
-    train_loader = DataLoader(train, batch_size=1)
+    train_loader = DataLoader(train, batch_size=torch.cuda.device_count() or 1)
     best_corr = -np.inf
     for epoch in range(30):
         print(f'epoch {epoch}')
         model.train()
-        for [x], [labels] in tqdm(train_loader):
+        for x, labels in tqdm(train_loader):
+            labels = rearrange(labels, 'b n d -> (b n) d')
             optimizer.zero_grad()
             y = model(x)
             loss = loss_func(y, labels) * 0.1 - corr(y, labels) * 0.9
@@ -120,10 +122,11 @@ class Model(nn.Module):
         )
 
     def forward(self, x):
+        x = x.squeeze(0) # remove the batch dimension, which should be 1
         x = self.embedding(x)
         x = self.transformer(x)
         x = x[:, :, :4].reshape(1, -1, x.shape[1] * 4) # x.shape[1] = nfeatures
-        # should the stacking be changed such that each head has 1 embedding?
+        # should the stacking be changed such that each head has 1 embedding?``
         x = self.inter_sample_transformer(x)
         return self.final(x).squeeze(0)
 
