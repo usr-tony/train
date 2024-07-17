@@ -40,7 +40,7 @@ def main():
     loss_func = nn.MSELoss()
     optimizer = torch.optim.SGD(
         model.parameters(),
-        lr=1e-3,
+        lr=2e-4,
     )
     train_df = get_train_df(get_features())
     train = DataByEra(train_df)
@@ -57,7 +57,7 @@ def main():
             loss.backward()
             optimizer.step()
 
-        if epoch < 10:
+        if epoch != 0 or epoch % 3 != 0:
             print('skipping validation')
             continue
 
