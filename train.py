@@ -57,7 +57,8 @@ def main():
             loss.backward()
             optimizer.step()
 
-        if epoch != 0 or epoch % 3 != 0:
+        if epoch == 0 or epoch % 3 != 0:
+            # run validation only every 3rd epoch
             print('skipping validation')
             continue
 
@@ -121,8 +122,7 @@ class Model(nn.Module):
             nn.Linear(256, 1),
         )
 
-    def forward(self, x):
-        x = x.squeeze(0) # remove the batch dimension, which should be 1
+    def forward(self, x: torch.Tensor):
         x = self.embedding(x)
         x = self.transformer(x)
         x = x[:, :, :4].reshape(1, -1, x.shape[1] * 4) # x.shape[1] = nfeatures
@@ -148,21 +148,6 @@ class DataByEra(Dataset):
             torch.from_numpy(data[['target']].values).to(device)
         ]
 
-
-class RandomData(Dataset):
-    def __init__(self, df: pd.DataFrame):
-        df = df.astype(float)
-        self.x = torch.from_numpy(df.drop(columns=['target', 'era']).values).float().to(device)
-        self.y = torch.from_numpy(df[['target']].values).float().to(device)
-
-    def __len__(self):
-        return len(self.y)
-
-    def __getitem__(self, idx):
-        return (
-            self.x[idx],
-            self.y[idx],
-        )
 
 
 @cache
@@ -191,12 +176,9 @@ def get_validation_df(features: tuple[str]=None):
     return df[df['target'].notna()]
 
 
-def evaluate(model: nn.Module, epoch: int, validation_df: pd.DataFrame=None):
+def evaluate(model: nn.Module, epoch: int):
     model.eval()
-    if validation_df is None:
-        validation_df = get_validation_df()
-
-    validation_df = validation_df.copy(deep=False)
+    validation_df = get_validation_df().copy(deep=False)
     predictions = []
     for era, group in tqdm(validation_df.groupby('era')):
         x = group.loc[:, get_features()].values.astype(np.int8)
