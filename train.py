@@ -1,3 +1,4 @@
+%%writefile train.py
 import torch
 from torch import nn
 from torch.utils.data import Dataset, DataLoader
@@ -10,7 +11,9 @@ import numpy as np
 import json
 from tqdm import tqdm
 from torch.nn.attention import SDPBackend, sdpa_kernel
+import warnings
 
+warnings.filterwarnings('ignore')
 
 sdpa_kernel(SDPBackend.FLASH_ATTENTION).__enter__()
 
@@ -38,10 +41,11 @@ def main():
         pass
     
     loss_func = nn.MSELoss()
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=2e-4,
+        lr=1e-4,
     )
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma=0.1)
     train_df = get_train_df(get_features())
     train = DataByEra(train_df)
     train_loader = DataLoader(train, batch_size=torch.cuda.device_count() or 1)
@@ -49,25 +53,34 @@ def main():
     for epoch in range(30):
         print(f'epoch {epoch}')
         model.train()
+        losses, corrs = [], []
         for x, labels in tqdm(train_loader):
             labels = rearrange(labels, 'b n d -> (b n) d')
             optimizer.zero_grad()
             y = model(x)
-            loss = loss_func(y, labels) * 0.1 - corr(y, labels) * 0.9
+            mse = loss_func(y, labels)
+            corr_ = corr(y, labels)
+            loss = mse * 0.1 - corr_ * 0.9
+            losses.append(loss.detach().to('cpu').numpy())
+            corrs.append(corr_.detach().to('cpu').numpy())
             loss.backward()
             optimizer.step()
-
-        if epoch == 0 or epoch % 3 != 0:
+        
+        scheduler.step()
+        print('learning rate:', optimizer.param_groups[0]['lr'])
+        print('mean corr:', np.array(corrs).mean())
+        print('mean loss:', np.array(losses).mean())
+        if epoch % 3 != 0 and epoch < 8:
             # run validation only every 3rd epoch
             print('skipping validation')
             continue
 
         with torch.no_grad():
-            era_corr_sum = evaluate(model, epoch).sum()
+            era_corr_mean = evaluate(model, epoch).mean()
 
-        print('sum of correlations \n', era_corr_sum)
-        if best_corr < era_corr_sum:
-            best_corr = era_corr_sum
+        print('validation mean corr \n', era_corr_mean)
+        if best_corr < era_corr_mean:
+            best_corr = era_corr_mean
             torch.save(model.state_dict(), 'model.pkl')
 
 
@@ -114,19 +127,21 @@ class Model(nn.Module):
         super().__init__()
         self.embedding = Embedding(nfeatures)
         self.transformer = Transformer(embed_dim)
-        self.inter_sample_transformer = Transformer(nfeatures * 4)
+        self.reduce_dim = nn.Linear(embed_dim, 8)
+        self.inter_sample_transformer = Transformer(nfeatures * 8)
         self.final = nn.Sequential(
             # layernorm here?
-            nn.Linear(nfeatures * 4, 256),
+            nn.Linear(nfeatures * 8, 256),
             nn.ReLU(),
             nn.Linear(256, 1),
         )
 
     def forward(self, x: torch.Tensor):
+        x = x.squeeze(0)
         x = self.embedding(x)
         x = self.transformer(x)
-        x = x[:, :, :4].reshape(1, -1, x.shape[1] * 4) # x.shape[1] = nfeatures
-        # should the stacking be changed such that each head has 1 embedding?``
+        x = self.reduce_dim(x)
+        x = rearrange(x, 'b n d -> 1 b (n d)')
         x = self.inter_sample_transformer(x)
         return self.final(x).squeeze(0)
 
@@ -147,7 +162,6 @@ class DataByEra(Dataset):
             torch.from_numpy(data.drop(columns='target').values).to(device),
             torch.from_numpy(data[['target']].values).to(device)
         ]
-
 
 
 @cache
