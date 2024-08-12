@@ -43,14 +43,14 @@ def main():
     loss_func = nn.MSELoss()
     optimizer = torch.optim.Adam(
         model.parameters(),
-        lr=1e-4,
+        lr=1e-5,
     )
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[5, 10], gamma=0.1)
     train_df = get_train_df(get_features())
     train = DataByEra(train_df)
     train_loader = DataLoader(train, batch_size=torch.cuda.device_count() or 1)
     best_corr = -np.inf
-    for epoch in range(30):
+    for epoch in range(12):
         print(f'epoch {epoch}')
         model.train()
         losses, corrs = [], []
@@ -60,7 +60,7 @@ def main():
             y = model(x)
             mse = loss_func(y, labels)
             corr_ = corr(y, labels)
-            loss = mse * 0.1 - corr_ * 0.9
+            loss = mse * .8 - corr_ * .2
             losses.append(loss.detach().to('cpu').numpy())
             corrs.append(corr_.detach().to('cpu').numpy())
             loss.backward()
@@ -126,6 +126,10 @@ class Model(nn.Module):
     def __init__(self, nfeatures, embed_dim=EMBED_DIM):
         super().__init__()
         self.embedding = Embedding(nfeatures)
+        self.transformers = nn.Sequential(*[
+            Transformer(embed_dim)
+            for _ in range(3)
+        ])
         self.transformer = Transformer(embed_dim)
         self.reduce_dim = nn.Linear(embed_dim, 8)
         self.inter_sample_transformer = Transformer(nfeatures * 8)
@@ -139,7 +143,7 @@ class Model(nn.Module):
     def forward(self, x: torch.Tensor):
         x = x.squeeze(0)
         x = self.embedding(x)
-        x = self.transformer(x)
+        x = self.transformers(x)
         x = self.reduce_dim(x)
         x = rearrange(x, 'b n d -> 1 b (n d)')
         x = self.inter_sample_transformer(x)
@@ -170,7 +174,7 @@ def get_features() -> tuple[str]:
     napi.download_dataset(path)
     with open(path) as f:
         features = json.loads(f.read())
-
+    
     return tuple(features['feature_sets'][FEATURE_SET])
 
 
