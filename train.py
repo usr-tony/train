@@ -51,6 +51,7 @@ def main():
     best_corr = -np.inf
     for epoch in range(12):
         print(f'epoch {epoch}')
+        print('learning rate:', optimizer.param_groups[0]['lr'])
         model.train()
         losses, corrs = [], []
         for x, labels in tqdm(train_loader):
@@ -66,7 +67,6 @@ def main():
             optimizer.step()
         
         scheduler.step()
-        print('learning rate:', optimizer.param_groups[0]['lr'])
         print('mean corr:', np.array(corrs).mean())
         print('mean loss:', np.array(losses).mean())
         if epoch % 3 != 0 and epoch < 8:
@@ -129,7 +129,6 @@ class Model(nn.Module):
             Transformer(embed_dim)
             for _ in range(3)
         ])
-        self.transformer = Transformer(embed_dim)
         self.reduce_dim = nn.Linear(embed_dim, 8)
         self.inter_sample_transformer = Transformer(nfeatures * 8)
         self.final = nn.Sequential(
