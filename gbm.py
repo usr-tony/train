@@ -1,6 +1,5 @@
 from train import get_train_df, get_features, BUCKET_NAME
 import lightgbm
-import psutil
 import os
 
 
@@ -12,7 +11,6 @@ def main():
         max_depth = max_depth,
         colsample_bytree = 0.15,
         learning_rate = 0.001,
-        num_threads = psutil.cpu_count(),
     )
     train_df = get_train_df()
     features = get_features()
