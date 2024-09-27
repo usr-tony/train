@@ -13,7 +13,6 @@ from torch.nn.attention import SDPBackend, sdpa_kernel
 import warnings
 
 warnings.filterwarnings('ignore')
-
 sdpa_kernel(SDPBackend.FLASH_ATTENTION).__enter__()
 
 EMBED_DIM = 32
@@ -23,7 +22,6 @@ BUCKET_NAME = 'train1230'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'{device=}')
 DATA_VERSION = 'v5.0'
-numerai_data_path = Path(DATA_VERSION)
 napi = NumerAPI()
 
 
