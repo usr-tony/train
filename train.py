@@ -22,7 +22,7 @@ FEATURE_SET = 'medium'
 BUCKET_NAME = 'train1230'
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'{device=}')
-DATA_VERSION = 'v4.3'
+DATA_VERSION = 'v5.0'
 numerai_data_path = Path(DATA_VERSION)
 napi = NumerAPI()
 
@@ -167,26 +167,30 @@ class DataByEra(Dataset):
 
 
 @cache
-def get_features() -> tuple[str]:
+def get_features(feature_set=FEATURE_SET) -> tuple[str]:
     path = f"{DATA_VERSION}/features.json"
     napi.download_dataset(path)
     with open(path) as f:
         features = json.loads(f.read())
     
-    return tuple(features['feature_sets'][FEATURE_SET])
+    return tuple(features['feature_sets'][feature_set])
 
 
+@cache
 def get_train_df(features: tuple[str]=None):
-    features = features or get_features()
-    path = f"{DATA_VERSION}/train_int8.parquet"
+    if features is None:
+        features = get_features()
+    path = f"{DATA_VERSION}/train.parquet"
     napi.download_dataset(path)
     return pd.read_parquet(path, columns=['era', 'target'] + list(features))
 
 
 @cache
 def get_validation_df(features: tuple[str]=None):
-    features = features or get_features()
-    path = f"{DATA_VERSION}/validation_int8.parquet"
+    if features is None:
+        features = get_features()
+        
+    path = f"{DATA_VERSION}/validation.parquet"
     napi.download_dataset(path)
     df = pd.read_parquet(path, columns=['era', 'target'] + list(features))
     return df[df['target'].notna()]
