@@ -9,3 +9,4 @@ cachetools
 tab-transformer-pytorch
 tqdm
 jupyter
+plotly

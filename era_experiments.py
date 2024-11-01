@@ -5,42 +5,30 @@ import json
 from numerapi import NumerAPI
 import lightgbm
 from joblib import delayed, Parallel
+from train import get_train_df, get_validation_df, get_features
 import numpy as np
 
 
 napi = NumerAPI()
 
-FEATURE_SET = 'all'
+FEATURE_SET = 'medium'
 DATA_VERSION = 'v4.3'
 predictions_file = '/kaggle/input/prediction-sets/medium_3x_layers.parquet'
 GBM_MAX_DEPTH = 6
 
 
-@cache
-def get_features(feature_set=FEATURE_SET) -> tuple[str]:
-    path = f"{DATA_VERSION}/features.json"
-    napi.download_dataset(path)
-    with open(path) as f:
-        features = json.loads(f.read())
-    
-    return tuple(features['feature_sets'][feature_set])
-
-
-@cache
-def get_train_df(features: tuple[str]=None):
-    features = features or get_features()
-    path = f"{DATA_VERSION}/train_int8.parquet"
-    napi.download_dataset(path)
-    return pd.read_parquet(path, columns=['era', 'target'] + list(features))
-
-
-@cache
-def get_validation_df(features: tuple[str]=None):
-    features = features or get_features()
-    path = f"{DATA_VERSION}/validation_int8.parquet"
-    napi.download_dataset(path)
-    df = pd.read_parquet(path, columns=['era', 'target'] + list(features))
-    return df[df['target'].notna()]
+def main():
+    Parallel(n_jobs=1)(
+        delayed(train_model_era)(era, group, list(get_features())) for era, group in get_train_df().groupby('era')
+    )
+    print('starting getting train predictions')
+    validation_df = get_validation_df()
+    train_era = train_df['era'].unique()
+    res = Parallel(n_jobs=15)(
+        get_preds(era, validation_df) for era in train_df['era'].unique()
+    )
+    res_df = pd.concat(res, axis='columns')
+    res_df.to_parquet('validation_era_predictions.parquet')
 
 
 def metrics_from_file(file_name):
@@ -130,28 +118,9 @@ def neutralize_v2(df, features, prop=1):
     return pd.DataFrame(neutral, index=df.index, columns=df.columns)
 
 
-@cache
-def gbm_validation_preds():
-    return get_preds(
-        get_validation_df(),
-        'large_gbm_validation_preds.parquet',
-    )
-
-@cache
-def gbm_train_preds():
-    return get_preds(
-        get_train_df(),
-        'large_gbm_train_preds.parquet'
-    )
-
-
-features = list(get_features())
-train_df = get_train_df()
-train_eras = list(train_df.groupby('era'))
-
 def train_model_era(era, group):
     model = lightgbm.LGBMRegressor(
-        n_estimators = 10,
+        n_estimators = 15,
         num_leaves = 2 ** GBM_MAX_DEPTH - 1,
         max_depth = GBM_MAX_DEPTH,
         colsample_bytree = 0.4,
@@ -162,9 +131,7 @@ def train_model_era(era, group):
     model.booster_.save_model(f'model_era_{era}.txt')
 
 
-Parallel(n_jobs=1)(
-    delayed(train_model_era)(era, group) for era, group in train_eras
-)
+
 
 @delayed
 def get_preds(era: str, df):
@@ -178,11 +145,6 @@ def get_preds(era: str, df):
     print(era, 'done')
     return pd.concat(model_preds).rename(era).astype(np.float32)
 
-print('starting getting validations')
-validation_df = get_validation_df()
-train_era = train_df['era'].unique()
-res = Parallel(n_jobs=15)(
-    get_preds(era, validation_df) for era in train_df['era'].unique()
-)
-res_df = pd.concat(res, axis='columns')
-res_df.to_parquet('validation_era_predictions.parquet')
+
+if __name__ == '__main__':
+    main()
